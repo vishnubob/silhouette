@@ -66,17 +66,24 @@ def run_script(fn):
             data = line[5]
             data = transform_data(data)
             if state == "out":
-                ep_out.write(data)
-                print "sent", data, line_num
+                if data != [27, 5]:
+                    ep_out.write(data)
+                    print "sent", data, sum(data)
+                    skip_read = False
+                else:
+                    skip_read = True
             elif state == "in":
+                if skip_read:
+                    continue
                 for x in range(10):
                     try:
                         res = ep_in.read(20)
                     except:
+                        print "TO"
                         time.sleep(.1)
-                    print "got", res, line_num
-                    if list(res) != data:
-                        print "expected", data
+                    if list(res) != data and data[-1] != 3:
+                        print "got", res, line_num
+                        print "-> expected", data
                     break
         elif pid == "OUT":
             state = "out"
