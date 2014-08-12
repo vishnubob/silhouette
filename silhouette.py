@@ -4,6 +4,8 @@ import sys
 import re
 import time
 
+from gpgl import *
+
 def transform_data(data):
     data = data.split(' ')
     res = []
@@ -66,9 +68,10 @@ def run_script(fn):
             data = line[5]
             data = transform_data(data)
             if state == "out":
-                if data != [27, 5]:
+                #if data != [27, 5]:
+                if data[0] == 77:
                     ep_out.write(data)
-                    print "sent", data, sum(data)
+                    print "sent", data, len(data), sum(data)
                     skip_read = False
                 else:
                     skip_read = True
@@ -101,5 +104,28 @@ def run_script(fn):
             state = None
         prevline = line
 
-fn = sys.argv[1]
-run_script(fn)
+def annotate(msg):
+    for ch in msg:
+        print "%02d" % ch, format(ch, '#010b'), chr(ch)
+
+def inch(val):
+    return int(val * 508)
+
+def mm(val):
+    return inch(val * 0.0393701)
+
+m = Move(inch(2.5), inch(2.5))
+print m
+commands = [
+    Home(),
+    Speed(10),
+    Pressure(0),
+    Circle(center=(inch(4), inch(4)), radius=inch(1), move=True),
+    Home(),
+]
+
+commands = [cmd.encode() for cmd in commands]
+commands = str.join('', commands)
+print commands
+ep_out.write(commands)
+
