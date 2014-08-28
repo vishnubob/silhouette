@@ -21,6 +21,13 @@ class Point(object):
         try: self.y = args[1]
         except: self.y = kw.get('y', 0)
 
+    def __sub__(self, other):
+        other = Point(*list(other))
+        return Point(self.x - other.x, self.y - other.y)
+    def __add__(self, other):
+        other = Point(*list(other))
+        return Point(self.x + other.x, self.y + other.y)
+
     def __getitem__(self, idx):
         if idx == 0: return self.x
         if idx == 1: return self.y
@@ -64,7 +71,7 @@ class Draw(GPGL_Command):
         super(Draw, self).__init__(*args, **kw)
     
     def encode(self, msg=''):
-        msg = ["%s,%s" % pt for pt in self.points]
+        msg = [str(pt) for pt in self.points]
         msg = str.join(',', msg)
         return super(Draw, self).encode(msg)
 
@@ -78,22 +85,38 @@ class Speed(GPGL_Command):
     Command = '!'
 
     def __init__(self, *args, **kw):
-        self.speed = 0
+        self.speed = 1
         if args:
             self.speed = args[0]
         super(Speed, self).__init__(*args, **kw)
 
-    def get_speed(self):
-        return self._speed
-    
-    def set_speed(self, speed):
-        self._speed = max(1, speed)
-
-    speed = property(get_speed, set_speed)
-
     def encode(self, msg=''):
         msg = str(self.speed)
         return super(Speed, self).encode(msg)
+
+    def get_speed(self):
+        return self._speed
+    def set_speed(self, speed):
+        self._speed = min(10, max(1, speed))
+    speed = property(get_speed, set_speed)
+
+class Media(GPGL_Command):
+    Command = 'FW'
+
+    def __init__(self, *args, **kw):
+        try: self.media = args[0]
+        except: self.media = kw.get('media', 300)
+        super(Media, self).__init__(*args, **kw)
+
+    def encode(self, msg=''):
+        msg = str(self.media)
+        return super(Media, self).encode(self.media)
+    
+    def set_media(self, val):
+        self._media = min(300, max(100, val))
+    def get_media(self):
+        return self._media
+    media = property(get_media, set_media)
 
 class Pressure(GPGL_Command):
     Command = 'FX'

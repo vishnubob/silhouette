@@ -1,6 +1,8 @@
+import time
 import usb.core
 import usb.util
 from warnings import warn
+import gpgl
 
 class SilhouetteException(Exception):
     pass
@@ -9,6 +11,10 @@ class Silhouette(object):
     def __init__(self, **kw):
         self.vendor_id = kw.get('vendor_id', 0x0b4d)
         self.product_id = kw.get('product_id', None)
+        self.pos = (0, 0)
+        self._pressure = gpgl.Pressure()
+        self._speed = gpgl.Speed()
+        self._position = None
 
     def usbscan(self):
         args = {"find_all": True, "idVendor": self.vendor_id}
@@ -26,7 +32,6 @@ class Silhouette(object):
 
     def connect(self):
         self.dev = self.usbscan()
-
         self.dev.reset()
 
         # set the active configuration. With no arguments, the first
@@ -49,14 +54,73 @@ class Silhouette(object):
         self.ep_intr_in = usb.util.find_descriptor(intf, 
                 custom_match=lambda e: usb.util.endpoint_direction(e.bEndpointAddress) == usb.util.ENDPOINT_IN and usb.util.endpoint_type(e.bEndpointAddress) == usb.util.ENDPOINT_TYPE_INTR)
         assert self.ep_intr_in is not None
+        self.init()
+
+    def move(self, pos, rel=True):
+        if rel:
+            rel_pos = pos - self._position
+            move = gpgl.RelativeMove(*rel_pos)
+        else:
+            move = gpgl.Move(*pos)
+        self.send(move)
+        self._position = gpgl.Point(*pos)
+
+    def get_position(self):
+        return self._position
+    def set_position(self, pos):
+        if self._position == None:
+            self.move(pos, rel=False)
+        else:
+            self.move(pos)
+    position = property(get_position, set_position)
+
+    def init(self):
+        self.write("\x1b\x04")
+
+    def set_speed(self, speed):
+        self._speed.speed = speed
+        self.send(self._speed)
+    def get_speed(self):
+        return self._speed.speed
+    speed = property(get_speed, set_speed)
+
+    def set_pressure(self, pressure):
+        self._pressure = gpgl.Pressure(pressure)
+        self.send(self._pressure)
+    def get_pressure(self):
+        return self._pressure.pressure
+    pressure = property(get_pressure, set_pressure)
+
+    def home(self):
+        self.send(gpgl.Home())
+
+    @property
+    def status(self):
+        self.write("\x1b\x05")
+        resp = self.read(1000)
+        resp = list(resp)
+        return resp
+    
+    @property
+    def idle(self):
+        return self.status == [48, 3]
+
+    @property
+    def version(self):
+        self.write("FG")
+        resp = self.read(1000)
+        resp = str.join('', map(chr, resp))
+        return resp
 
     def read(self, length=1):
-        return self.ep_in.read(1)
+        return self.ep_in.read(length)
 
     def write(self, msg):
-        self.ep_out.write(msg)
+        reslen = self.ep_out.write(msg)
+        assert reslen == len(msg)
 
-    def send(self, commands):
-        commands = [cmd.encode() for cmd in commands]
-        commands = str.join('', commands)
-        self.write(commands)
+    def send(self, *commands, **kw):
+        self.write(str.join('', [cmd.encode() for cmd in commands]))
+        if kw.get('block', True):
+            while not self.idle:
+                time.sleep(.1)
