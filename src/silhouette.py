@@ -1,14 +1,31 @@
 import usb.core
 import usb.util
+from warnings import warn
+
+class SilhouetteException(Exception):
+    pass
 
 class Silhouette(object):
-    def connect(self):
-        # find our device
-        self.dev = usb.core.find(idVendor=0x0b4d, idProduct=0x1123)
+    def __init__(self, **kw):
+        self.vendor_id = kw.get('vendor_id', 0x0b4d)
+        self.product_id = kw.get('product_id', None)
 
-        # was it found?
-        if self.dev is None:
-            raise ValueError('Device not found')
+    def usbscan(self):
+        args = {"find_all": True, "idVendor": self.vendor_id}
+        if self.product_id:
+            args["idProduct"] = self.product_id
+        devs = usb.core.find(**args)
+        devs = list(devs)
+        if not devs:
+            msg = "Can not find any devices with vendor_id == %s" % self.vendor_id
+            raise SilhouetteException, msg
+        if len(devs) > 1:
+            msg = "There are multiple devices that match vendor_id == %s, using the first one in the list." % self.vendor_id
+            warn(msg)
+        return devs[0]
+
+    def connect(self):
+        self.dev = self.usbscan()
 
         self.dev.reset()
 
@@ -31,7 +48,7 @@ class Silhouette(object):
 
         self.ep_intr_in = usb.util.find_descriptor(intf, 
                 custom_match=lambda e: usb.util.endpoint_direction(e.bEndpointAddress) == usb.util.ENDPOINT_IN and usb.util.endpoint_type(e.bEndpointAddress) == usb.util.ENDPOINT_TYPE_INTR)
-        assert ep_intr_in is not None
+        assert self.ep_intr_in is not None
 
     def read(self, length=1):
         return self.ep_in.read(1)
@@ -43,5 +60,3 @@ class Silhouette(object):
         commands = [cmd.encode() for cmd in commands]
         commands = str.join('', commands)
         self.write(commands)
-
-
