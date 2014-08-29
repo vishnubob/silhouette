@@ -3,11 +3,16 @@ import sys
 import math
 from silhouette import *
 
+def log(msg):
+    ts = time.strftime("%c")
+    msg = "%s] %s" % (ts, msg)
+    sys.stdout.write(msg)
+    sys.stdout.flush()
+
 class Worker(object):
     def __init__(self):
         self.cutter = Silhouette()
         self.cutter.connect()
-        self.cutter.home
         self.cutter.speed = 1
         self.cutter.home()
 
@@ -18,9 +23,15 @@ class Worker(object):
         self.cutter.draw(points)
 
     def iter_cut(self, minp, maxp, ckw, reps=1):
+        cnt = 0
+        kwstr = 'Cutting circle:\n    radius: %(radius)s, steps: %(steps)s, center: (%(center_x)s, %(center_y)s)' % ckw
+        msg = "%s\n" % kwstr
+        log(msg)
         for pressure in range(minp, maxp + 1):
             for rep in range(reps):
-                print "rep:", rep + 1, "pressure:", pressure
+                cnt += 1
+                msg = "Run #%d, repeat #%d/%d, pressure: %d\n" % (cnt, rep + 1, reps, pressure)
+                log(msg)
                 self.cutter.pressure = pressure
                 self.cut_circle(**ckw)
 
@@ -60,24 +71,24 @@ def run_mode(mode, center=None):
 
 def cli():
     Defaults = {
-        'radius': 0,
+        'radius': "1in",
         'repeat': 2,
-        'center_x': 0,
-        'center_y': 0,
+        'center_x': "2in",
+        'center_y': "2in",
         'min_pressure': 1,
         'max_pressure': 10,
         'steps': 100,
     }
 
     parser = argparse.ArgumentParser(description='Cut/draw circles')
-    parser.add_argument('-r', '--radius', type=str, help='Radius of circle')
+    parser.add_argument('-r', '--radius', type=str, help='Radius of circle (1.2in, 3mm, etc)')
+    parser.add_argument('-x', '--center-x', type=str, help='X center of circle (1.2in, 3mm, etc)')
+    parser.add_argument('-y', '--center-y', type=str, help='Y center of circle (1.2in, 3mm, etc)')
+    parser.add_argument('-s', '--steps', type=int, help='The number of points used to draw the circle (resolution)')
+    parser.add_argument('-p', '--min-pressure', type=int, help='Min pressure of knife (1-33)')
+    parser.add_argument('-P', '--max-pressure', type=int, help='Max pressure of knife (1-33)')
     parser.add_argument('-R', '--repeat', type=int, help='How many times to repeat the cut')
-    parser.add_argument('-p', '--min-pressure', type=int, help='Min pressure')
-    parser.add_argument('-P', '--max-pressure', type=int, help='Max pressure')
-    parser.add_argument('-x', '--center-x', type=str, help='X center of circle')
-    parser.add_argument('-y', '--center-y', type=str, help='Y center of circle')
-    parser.add_argument('-s', '--steps', type=int, help='Number of points in circle')
-    parser.add_argument('-m', '--mode', type=str, help='Number of points in circle')
+    parser.add_argument('-m', '--mode', type=str, help='Use a predefined mode (see this code)')
     parser.set_defaults(**Defaults)
     args = parser.parse_args()
     return args
@@ -95,4 +106,3 @@ if __name__ == '__main__':
         }
         args = (args.min_pressure, args.max_pressure, ckw, args.repeat)
         run_pattern(args)
-
