@@ -1,3 +1,5 @@
+import argparse
+import sys
 import math
 from silhouette import *
 
@@ -40,24 +42,57 @@ valve_seal_outer = {
 }
 valve_seal_outer_args = (1, 10, valve_seal_outer, 2)
 
-def run_pattern(args, center, home=True):
-    args[2]["center_x"] = center[0]
-    args[2]["center_y"] = center[1]
+def run_pattern(args, center=None, home=True):
+    if center:
+        args[2]["center_x"] = center[0]
+        args[2]["center_y"] = center[1]
     w = Worker()
     w.iter_cut(*args)
     if home:
         w.cutter.home()
 
-def run_mode(mode, center):
+def run_mode(mode, center=None):
     if mode == "membrane":
         run_pattern(membrane_args, center)
     elif mode == "vseal":
         run_pattern(valve_seal_inner_args, center, home=False)
         run_pattern(valve_seal_outer_args, center)
 
-center = ("5in", "2.5in")
-run_mode("vseal", center)
+def cli():
+    Defaults = {
+        'radius': 0,
+        'repeat': 2,
+        'center_x': 0,
+        'center_y': 0,
+        'min_pressure': 1,
+        'max_pressure': 10,
+        'steps': 100,
+    }
 
+    parser = argparse.ArgumentParser(description='Cut/draw circles')
+    parser.add_argument('-r', '--radius', type=str, help='Radius of circle')
+    parser.add_argument('-R', '--repeat', type=int, help='How many times to repeat the cut')
+    parser.add_argument('-p', '--min-pressure', type=int, help='Min pressure')
+    parser.add_argument('-P', '--max-pressure', type=int, help='Max pressure')
+    parser.add_argument('-x', '--center-x', type=str, help='X center of circle')
+    parser.add_argument('-y', '--center-y', type=str, help='Y center of circle')
+    parser.add_argument('-s', '--steps', type=int, help='Number of points in circle')
+    parser.add_argument('-m', '--mode', type=str, help='Number of points in circle')
+    parser.set_defaults(**Defaults)
+    args = parser.parse_args()
+    return args
 
-def membrane():
-    run_patter(membrane_args)
+if __name__ == '__main__':
+    args = cli()
+    if args.mode:
+        run_mode(args.mode, (args.center_x, args.center_y))
+    else:
+        ckw = {
+            "steps": args.steps, 
+            "radius": args.radius,
+            "center_x": args.center_x,
+            "center_y": args.center_y,
+        }
+        args = (args.min_pressure, args.max_pressure, ckw, args.repeat)
+        run_pattern(args)
+
