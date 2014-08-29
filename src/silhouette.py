@@ -57,6 +57,9 @@ class Silhouette(object):
         self.init()
 
     def move(self, pos, rel=True):
+        pos = gpgl.Point(*list(pos))
+        if self._position == pos:
+            return
         if rel:
             rel_pos = pos - self._position
             move = gpgl.RelativeMove(*rel_pos)
@@ -73,6 +76,11 @@ class Silhouette(object):
         else:
             self.move(pos)
     position = property(get_position, set_position)
+
+    def draw(self, points):
+        cmd = gpgl.Draw(*points)
+        self.send(cmd)
+        self._position = cmd.points[-1]
 
     def init(self):
         self.write("\x1b\x04")
@@ -111,6 +119,10 @@ class Silhouette(object):
         resp = self.read(1000)
         resp = str.join('', map(chr, resp))
         return resp
+    
+    def wait(self):
+        while not self.idle:
+            time.sleep(.1)
 
     def read(self, length=1):
         return self.ep_in.read(length)
@@ -120,7 +132,8 @@ class Silhouette(object):
         assert reslen == len(msg)
 
     def send(self, *commands, **kw):
-        self.write(str.join('', [cmd.encode() for cmd in commands]))
-        if kw.get('block', True):
-            while not self.idle:
-                time.sleep(.1)
+        block = kw.get('block', True)
+        for cmd in commands:
+            self.write(cmd.encode())
+            if block: 
+                self.wait()

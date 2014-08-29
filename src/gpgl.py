@@ -21,6 +21,11 @@ class Point(object):
         try: self.y = args[1]
         except: self.y = kw.get('y', 0)
 
+    def __eq__(self, other):
+        if other == None:
+            return False
+        other = Point(*list(other))
+        return (self.x == other.x) and (self.y == other.y)
     def __sub__(self, other):
         other = Point(*list(other))
         return Point(self.x - other.x, self.y - other.y)
