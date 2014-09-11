@@ -1,39 +1,63 @@
 import math
 import re
 
-def inch(val):
-    return int(val * 508)
+# units
+from pint import UnitRegistry
+units = UnitRegistry()
 
-def mm(val):
-    return inch(val * 0.0393701)
+# my guess as to why 508 is the magic number is the motor steps and the belt TPI
+# i am guessing the belt is 2.54 TPI, and the motor can provide 200 steps
+# 2.54 * 200 = 508
+units.define('steps = inch / 508.0 = step')
 
-def parse_unit(val):
-    inch_re = re.compile("([\d\.]+)in(ch)?", re.IGNORECASE)
-    mm_re = re.compile("([\d\.]+)m(m)?", re.IGNORECASE)
-    val = str(val)
-    inch_m = inch_re.match(val)
-    mm_m = mm_re.match(val)
-    if inch_m:
-        val = float(inch_m.group(1))
-        return inch(val)
-    if mm_m:
-        val = float(mm_m.group(1))
-        return mm(val)
-    return float(val)
+def steps(val):
+    val = unit(val, unit=None)
+    return int(val.to("steps").magnitude)
+
+## units
+
+DEFAULT_UNIT = "mm"
+
+def unit(val, **kw):
+    _unit = kw.get("unit", DEFAULT_UNIT)
+    if _unit != None:
+        _unit = units.parse_expression(_unit)
+    if type(val) != units.Quantity:
+        if type(val) in (int, float):
+            assert _unit, "value %r of type '%r' requires a unit definition" % (val, type(val))
+            val = val * _unit
+        elif type(val) in (str, unicode):
+            val = units.parse_expression(val)
+        else:
+            raise TypeError, "I don't know how to convert type '%s' to a unit" % str(type(val))
+    assert type(val) == units.Quantity, "%r != %r" % (type(val), units.Quantity)
+    if _unit:
+        val = val.to(_unit)
+    return val
+
+def inch2mm(inches):
+    inches = unit(inches, unit="inch")
+    return inches.to(units.mm).magnitude
+
+def mm2inch(mm):
+    mm = unit(mm, unit="mm")
+    return mm.to(units.inch).magnitude
 
 def circle(**kw):
-    defs = {"steps": 10, "radius": "1in", "center_x": "2in", "center_y": "2in"}
+    assert "radius" in kw, "Need radius keyword argument"
+    defs = {"steps": 20, "center_x": "0in", "center_y": "0in", "phase": 0}
     _kw = defs.copy()
-    _kw.update({key: parse_unit(val) for (key, val) in kw.items()})
-    steps = _kw["steps"]
-    radius = _kw["radius"]
-    center_x = _kw["center_x"]
-    center_y = _kw["center_y"]
+    _kw.update(kw)
+    _steps = int(_kw["steps"])
+    radius = unit(_kw["radius"])
+    center_x = unit(_kw["center_x"])
+    center_y = unit(_kw["center_y"])
+    phase = float(_kw["phase"])
     #
     if steps < 2:
         raise ValueError, "3 or more steps are required"
-    radstep = (2 * math.pi) / float(steps - 1)
-    for rad in range(int(steps)):
-        x = math.cos(rad * radstep) * radius + center_x
-        y = math.sin(rad * radstep) * radius + center_y
-        yield (x, y)
+    radstep = (2 * math.pi) / float(_steps - 1)
+    for rad in range(int(_steps)):
+        x = math.cos(rad * radstep + phase) * radius + center_x
+        y = math.sin(rad * radstep + phase) * radius + center_y
+        yield (steps(x), steps(y))

@@ -1,6 +1,8 @@
 import argparse
 import sys
 import math
+import pint
+import operator
 from silhouette import *
 
 def log(msg):
@@ -11,10 +13,16 @@ def log(msg):
 
 class Worker(object):
     def __init__(self):
-        self.cutter = Silhouette()
-        self.cutter.connect()
-        self.cutter.speed = 1
-        self.cutter.home()
+        self._cutter = None
+
+    @property
+    def cutter(self):
+        if self._cutter == None:
+            self._cutter = Silhouette()
+            self._cutter.connect()
+            self._cutter.speed = 1
+            self._cutter.home()
+        return self._cutter
 
     def cut_circle(self, **kw):
         points = circle(**kw)
@@ -30,42 +38,97 @@ class Worker(object):
         reps = kw.get("repeat", 1)
         minp = kw.get("min_pressure", 1)
         maxp = kw.get("max_pressure", 1)
+        total_cycles = ((maxp + 1) - minp) * reps
+        phase_step = (2 * math.pi) / total_cycles
         for pressure in range(minp, maxp + 1):
             for rep in range(reps):
-                cnt += 1
-                msg = "Run #%d, repeat #%d/%d, pressure: %d\n" % (cnt, rep + 1, reps, pressure)
+                kw["phase"] = phase_step * cnt
+                msg = "Run #%d/%d, repeat #%d/%d, pressure: %d, phase: %.2f\n    Circle: %r\n" % (cnt + 1, total_cycles, rep + 1, reps, pressure, math.degrees(kw["phase"]), kw)
                 log(msg)
                 self.cutter.pressure = pressure
                 self.cut_circle(**kw)
+                cnt += 1
 
-Modes = {}
+class CircleMode(object):
+    boiler_plate = {
+        "steps": 500, 
+        "repeat": 2,
+        "min_pressure": 1,
+        "max_pressure": 10,
+    }
+    
+    def __init__(self, args):
+        self.args = args
+        self.worker = Worker()
 
-membrane = {
-    "steps": 500, 
-    "radius": "19mm", 
-    "repeat": 2,
-    "min_pressure": 1,
-    "max_pressure": 10,
-}
-Modes["membrane"] = membrane
+    def run_circle(self, kw):
+        self.worker.iter_cut(**kw)
 
-valve_seal_inner = {
-    "steps": 500, 
-    "radius": "8mm", 
-    "repeat": 2,
-    "min_pressure": 1,
-    "max_pressure": 10,
-}
-Modes["valve_seal_inner"] = valve_seal_inner
+    def run(self):
+        rmap = [(x, unit(y)) for (x, y) in self.radius_map.items()]
+        func = operator.itemgetter(1)
+        rmap.sort(key=func)
+        for (name, radius) in rmap:
+            kw = self.boiler_plate.copy()
+            kw.update(self.args)
+            kw["radius"] = radius
+            self.run_circle(kw)
+        self.worker.cutter.home()
 
-valve_seal_outer = {
-    "steps": 500, 
-    "radius": "10mm", 
-    "repeat": 2,
-    "min_pressure": 1,
-    "max_pressure": 10,
-}
-Modes["valve_seal_outer"] = valve_seal_outer
+class Membrane(CircleMode):
+    radius_map = {
+        "outer": "19mm", 
+    }
+
+class ValveSeal(CircleMode):
+    radius_map = {
+        "outer": "10mm",
+        "inner": "8mm", 
+    }
+
+class InletSeal72(CircleMode):
+    radius_map = {
+        "outer": "7.5mm",
+        "inner": "2.5mm",
+    }
+
+class Gasket(CircleMode):
+    radius_map = {
+        "outer": "19.5mm",
+        "inner": "10.0mm",
+        "lughole": "2.0mm",
+    }
+    spoke_radius = "15.5mm"
+    lug_holes = 3
+
+    def run(self):
+        cx = unit(self.args["center_x"])
+        cy = unit(self.args["center_y"])
+        kw = self.boiler_plate.copy()
+        kw["radius"] = unit(self.radius_map["lughole"])
+        kw.update(self.args)
+        # lug holes
+        astep = (2.0 * math.pi) / self.lug_holes
+        radius = unit(self.spoke_radius)
+        for step in range(self.lug_holes):
+            x = math.cos(astep * step) * radius + cx
+            y = math.sin(astep * step) * radius + cy
+            kw["center_x"] = x
+            kw["center_y"] = y
+            self.run_circle(kw)
+        # inner radius
+        kw["radius"] = self.radius_map["inner"]
+        kw["center_x"] = cx
+        kw["center_y"] = cy
+        self.run_circle(kw)
+        # outer radius
+        kw["radius"] = self.radius_map["outer"]
+        kw["center_x"] = cx
+        kw["center_y"] = cy
+        self.run_circle(kw)
+        self.worker.cutter.home()
+
+Modes = [Gasket, Membrane, ValveSeal, InletSeal72]
 
 def run_pattern(args, home=True):
     w = Worker()
@@ -74,12 +137,13 @@ def run_pattern(args, home=True):
         w.cutter.home()
 
 def run_mode(mode, args, center=None):
-    _mode = Modes.get(mode, None)
+    mmap = {m.__name__.lower(): m for m in Modes}
+    mode = mode.lower()
+    _mode = mmap.get(mode, None)
     if not _mode:
-        raise KeyError, "Mode must be one of %s, not %s" % (str.join(', ', Modes), mode)
-    _args = _mode.copy()
-    _args.update(args)
-    run_pattern(_args)
+        raise KeyError, "Mode must be one of %s, not %s" % (str.join(', ', mmap), mode)
+    mode = _mode(args)
+    mode.run()
 
 def cli():
     Defaults = {
