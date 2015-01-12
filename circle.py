@@ -42,8 +42,9 @@ class Worker(object):
         phase_step = (2 * math.pi) / total_cycles
         for pressure in range(minp, maxp + 1):
             for rep in range(reps):
-                kw["phase"] = phase_step * cnt
-                msg = "Run #%d/%d, repeat #%d/%d, pressure: %d, phase: %.2f\n    Circle: %r\n" % (cnt + 1, total_cycles, rep + 1, reps, pressure, math.degrees(kw["phase"]), kw)
+                #kw["phase"] = phase_step * cnt
+                kw["phase"] = 0
+                msg = "Run #%d/%d, repeat #%d/%d, pressure: %d, phase: %0.2f degs\n" % (cnt + 1, total_cycles, rep + 1, reps, pressure, math.degrees(kw["phase"]))
                 log(msg)
                 self.cutter.pressure = pressure
                 self.cut_circle(**kw)
@@ -80,17 +81,92 @@ class Membrane(CircleMode):
         "outer": "19mm", 
     }
 
+class MembraneOring(CircleMode):
+    radius_map = {
+        "outer": "19mm", 
+        "inner": "15mm", 
+    }
+
 class ValveSeal(CircleMode):
     radius_map = {
         "outer": "10mm",
         "inner": "8mm", 
     }
 
-class InletSeal72(CircleMode):
+class InletSeal54(CircleMode):
     radius_map = {
         "outer": "7.5mm",
         "inner": "2.5mm",
     }
+
+class InletSeal72(CircleMode):
+    radius_map = {
+        "outer": "7.5mm",
+        "inner": "3mm",
+    }
+
+class OutletSeal72(CircleMode):
+    radius_map = {
+        "outer": "10mm",
+        "inner": "4mm",
+    }
+
+class InSealValve(CircleMode):
+    radius_map = {
+        "outer": "7.75mm",
+        "inner": "2mm",
+    }
+
+class InnerInSeal(CircleMode):
+    radius_map = {
+        "outer": "10mm",
+        "inner": "4mm",
+    }
+
+
+class StretchMembrane(CircleMode):
+    #original_radius = 58
+    original_radius = 34
+    # first membrane, seems to stretch out still
+    stretch = 15
+    #stretch = 25
+    margin = 20
+    hole_radius = original_radius - stretch
+    outer_radius = hole_radius + margin
+    post_radius = 1.5
+    post_count = 16
+
+    radius_map = {
+        "outer": str(outer_radius) + "mm",
+        "post": str(post_radius) + "mm",
+        "wreath": str(hole_radius) + "mm",
+    }
+
+    def posts(self):
+        astep = math.pi * 2 / self.post_count
+        for idx in range(self.post_count):
+            x = math.cos(astep * idx) * self.hole_radius
+            y = math.sin(astep * idx) * self.hole_radius
+            yield (x, y)
+
+    def run(self):
+        cx = unit(self.args["center_x"])
+        cy = unit(self.args["center_y"])
+        kw = self.boiler_plate.copy()
+        kw["radius"] = unit(self.radius_map["post"])
+        kw.update(self.args)
+        #
+        for (x, y) in self.posts():
+            kw["center_x"] = unit(x, unit="mm") + cx
+            kw["center_y"] = unit(y, unit="mm") + cy
+            self.run_circle(kw)
+        # outer radius
+        kw["radius"] = unit(self.radius_map["outer"])
+        kw["center_x"] = cx
+        kw["center_y"] = cy
+        self.run_circle(kw)
+        self.worker.cutter.home()
+
 
 class Gasket(CircleMode):
     radius_map = {
@@ -128,7 +204,7 @@ class Gasket(CircleMode):
         self.run_circle(kw)
         self.worker.cutter.home()
 
-Modes = [Gasket, Membrane, ValveSeal, InletSeal72]
+Modes = [mode for mode in globals().values() if (type(mode) == type) and issubclass(mode, CircleMode)]
 
 def run_pattern(args, home=True):
     w = Worker()

@@ -104,7 +104,7 @@ class Silhouette(object):
 
     @property
     def status(self):
-        self.write("\x1b\x05")
+        reslen = self.ep_out.write("\x1b\x05")
         resp = self.read(1000)
         resp = list(resp)
         return resp
@@ -125,11 +125,20 @@ class Silhouette(object):
             time.sleep(.1)
 
     def read(self, length=1):
-        return self.ep_in.read(length)
+        info = self.ep_in.read(length)
+        return info
 
     def write(self, msg):
-        reslen = self.ep_out.write(msg)
-        assert reslen == len(msg)
+        bufsize = self.ep_out.wMaxPacketSize
+        idx = 0
+        while idx < len(msg):
+            submsg = msg[idx:idx + bufsize]
+            reslen = self.ep_out.write(submsg)
+            #print "[%s:%s] %s" % (idx, idx + bufsize, len(msg))
+            assert reslen == len(submsg), "%s != %s" % (reslen, len(submsg))
+            idx += bufsize
+            if idx < len(msg):
+                self.wait()
 
     def send(self, *commands, **kw):
         block = kw.get('block', True)
