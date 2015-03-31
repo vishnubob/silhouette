@@ -10,6 +10,9 @@ units = UnitRegistry()
 # 2.54 * 200 = 508
 units.define('steps = inch / 508.0 = step')
 
+# For SVG files, Silhouette Studio defines one inch as 72 points
+units.define('dpi = inch / 72.0')
+
 def steps(val):
     val = unit(val, unit=None)
     return int(val.to("steps").magnitude)
