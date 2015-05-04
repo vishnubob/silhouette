@@ -14,6 +14,8 @@ class Silhouette(object):
         self.pos = (0, 0)
         self._pressure = gpgl.Pressure()
         self._speed = gpgl.Speed()
+        self._media = gpgl.Media()
+        self._offset = gpgl.Offset()
         self._position = None
 
     def usbscan(self):
@@ -85,12 +87,27 @@ class Silhouette(object):
     def init(self):
         self.write("\x1b\x04")
 
+    def set_offset(self, offset):
+        self._offset.offset = offset
+        self.send(self._offset)
+    def get_offset(self):
+        return self._offset.offset
+    offset = property(get_offset, set_offset)
+
     def set_speed(self, speed):
         self._speed.speed = speed
         self.send(self._speed)
     def get_speed(self):
         return self._speed.speed
     speed = property(get_speed, set_speed)
+
+    def set_media(self, media):
+        self._media.media = media
+        self.send(self._media)
+    def get_media(self):
+        return self._media.media
+    media = property(get_media, set_media)
+
 
     def set_pressure(self, pressure):
         self._pressure = gpgl.Pressure(pressure)
@@ -105,13 +122,32 @@ class Silhouette(object):
     @property
     def status(self):
         reslen = self.ep_out.write("\x1b\x05")
-        resp = self.read(1000)
+        resp = self.read(2)
         resp = list(resp)
-        return resp
+        if len(resp) != 2:
+            raise ValueError, "Bad response to status request"
+        (status_byte, magic_byte) = resp
+        if magic_byte != 0x3:
+            raise ValueError, "Status magic byte does not equal 0x03 (0x%02x)" % resp[-1]
+        if status_byte == 0x30:
+            return "ready"
+        if status_byte == 0x31:
+            return "moving"
+        if status_byte == 0x32:
+            return "unloaded"
+        return "unknown"
     
     @property
-    def idle(self):
-        return self.status == [48, 3]
+    def ready(self):
+        return self.status == "ready"
+
+    @property
+    def moving(self):
+        return self.status == "moving"
+
+    @property
+    def unloaded(self):
+        return self.status == "unloaded"
 
     @property
     def version(self):
@@ -121,7 +157,7 @@ class Silhouette(object):
         return resp
     
     def wait(self):
-        while not self.idle:
+        while not self.ready:
             time.sleep(.1)
 
     def read(self, length=1):
@@ -131,6 +167,7 @@ class Silhouette(object):
     def write(self, msg):
         bufsize = self.ep_out.wMaxPacketSize
         idx = 0
+        #print str.join(' ', ["%s (0x%02x)" % (x, ord(x)) for x in msg])
         while idx < len(msg):
             submsg = msg[idx:idx + bufsize]
             reslen = self.ep_out.write(submsg)

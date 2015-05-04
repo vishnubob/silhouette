@@ -135,6 +135,19 @@ class Pressure(GPGL_Command):
         msg = str(self.pressure)
         return super(Pressure, self).encode(msg)
 
+class Offset(GPGL_Command):
+    Command = 'FC'
+
+    def __init__(self, *args, **kw):
+        try: self.offset = args[0]
+        except: self.offset = kw.get('offset', 0)
+        super(Offset, self).__init__(*args, **kw)
+
+    def encode(self, msg=''):
+        msg = str(self.offset)
+        return super(Offset, self).encode(msg)
+
+
 class Circle(GPGL_Command):
     Command = 'W'
 

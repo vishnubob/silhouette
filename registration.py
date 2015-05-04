@@ -13,14 +13,14 @@ def to_dpi(vector):
 
 class RegistrationMarks(object):
     Defaults = {
-        "top_margin": "12mm",
-        "bottom_margin": "12mm",
-        "left_margin": "12mm",
-        "right_margin": "12mm",
+        "top_margin": ".394in",
+        "bottom_margin": ".394in",
+        "left_margin": ".394in",
+        "right_margin": ".394in",
         "width": "8.5inch",
         "height": "11inch",
-        "thickness": "1.0mm",
-        "length": "20mm",
+        "thickness": "0.039in",
+        "length": "0.787in",
         "square": "5mm",
     }
 
